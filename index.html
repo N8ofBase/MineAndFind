@@ -191,15 +191,15 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--lantern);outlin
 <div class="overlay" id="setup">
   <div class="sheet">
     <img class="logo" id="logoImg" alt="Mine & Find box art: four miners around a treasure chest at a mine entrance">
-    <h2>Dig deep. Find yours.</h2>
+    <h2>Mine it and Find it.</h2>
     <div id="recBox"></div>
     <p>Flip cards, find your shape's treasure, and bump rivals back to the surface. Turn your phone sideways for the sideways map.</p>
     <div>
       <div class="lbl">Mode</div>
       <div class="seg" id="modeSeg">
-        <button type="button" data-mode="standard">Standard<small>4 miners</small></button>
-        <button type="button" data-mode="two">2 Player<small>2 miners each</small></button>
         <button type="button" data-mode="solo">Solo<small>run all 4</small></button>
+        <button type="button" data-mode="standard">Custom<small>you vs. computer</small></button>
+        <button type="button" data-mode="two">2 Player<small>2 miners each</small></button>
       </div>
     </div>
     <div id="ctrlBox"></div>
@@ -271,8 +271,8 @@ const CART = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18l-2.5 
 const lampOn = on => LAMP.replace('<svg', `<svg class="${on?'on':''}"`);
 const cartOn = on => CART.replace('<svg', `<svg class="${on?'on':''}"`);
 
-let cfg = {mode:'standard', adv:false, ctrl:{circle:'human',diamond:'cpu',triangle:'cpu',star:'cpu'}, p2:'cpu'};
-try { const saved = JSON.parse(localStorage.getItem('mnf-cfg')||'null'); if (saved && saved.ctrl) cfg = Object.assign(cfg, saved); } catch(e) {}
+let cfg = {v:2, mode:'solo', adv:false, ctrl:{circle:'human',diamond:'cpu',triangle:'cpu',star:'cpu'}, p2:'cpu'};
+try { const saved = JSON.parse(localStorage.getItem('mnf-cfg')||'null'); if (saved && saved.ctrl){ if (saved.v!==2){ saved.mode='solo'; saved.v=2; } cfg = Object.assign(cfg, saved); } } catch(e) {}
 function saveCfg(){ try { localStorage.setItem('mnf-cfg', JSON.stringify(cfg)); } catch(e) {} }
 
 let S = null, cellEls = [], tokenEls = {}, uid = 0, gameId = 0;
@@ -637,7 +637,7 @@ function renderSetup(){
   const pick = (val, on, key) => `<div class="pick" data-key="${key}"><button type="button" data-v="human" aria-pressed="${val==='human'}">${on[0]}</button><button type="button" data-v="cpu" aria-pressed="${val==='cpu'}">${on[1]}</button></div>`;
   let h='';
   if (cfg.mode==='standard'){
-    h = `<div class="lbl">Who digs</div><div class="rows">` + ORDER.map(s=>`<div class="row" style="--mc:${INFO[s].color}">${shapeSVG(s)}<span>${INFO[s].name}</span>${pick(cfg.ctrl[s],['You','CPU'],s)}</div>`).join('') + `</div><p style="margin-top:8px;text-align:left">Pass the phone around for more players.</p>`;
+    h = `<div class="lbl">Pick your miner</div><div class="rows">` + ORDER.map(s=>`<div class="row" style="--mc:${INFO[s].color}">${shapeSVG(s)}<span>${INFO[s].name}</span>${pick(cfg.ctrl[s],['You','CPU'],s)}</div>`).join('') + `</div><p style="margin-top:8px;text-align:left">Choose You for the miner you want. The computer digs for the rest.</p>`;
   } else if (cfg.mode==='two'){
     h = `<div class="lbl">Teams</div><div class="rows"><div class="row">${shapeSVG('circle')}${shapeSVG('triangle')}<span>Player 1</span><small style="margin-left:auto;color:var(--dust);font-weight:800">You</small></div><div class="row">${shapeSVG('diamond')}${shapeSVG('star')}<span>Player 2</span>${pick(cfg.p2,['Friend','CPU'],'p2')}</div></div>`;
   } else {
