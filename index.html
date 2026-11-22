@@ -51,6 +51,12 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--lantern);outlin
 .turn svg{width:30px;height:30px;flex:none}
 .turn b{font-family:var(--display);font-weight:400;font-size:16px;display:block}
 .turn small{color:var(--dust);font-weight:700}
+.turn .tally{margin-left:auto;background:var(--rock3);color:var(--ink);font-family:var(--display);font-size:13px;padding:5px 9px;border-radius:999px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.turn .tally + .final{margin-left:6px}
+.recs{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
+.recs span{background:var(--rock2);border-radius:999px;padding:6px 12px;font-weight:800;font-size:13px}
+.recs b{color:var(--lantern);font-family:var(--display);font-weight:400}
+.newrec{color:#2a1a05;background:var(--lantern);border-radius:999px;padding:6px 12px;font-weight:800;text-align:center;align-self:center}
 .turn .final{margin-left:auto;background:var(--lantern);color:#2a1a05;font-weight:800;font-size:11px;letter-spacing:.06em;padding:4px 8px;border-radius:999px;text-transform:uppercase}
 .boardWrap{flex:1;min-height:0;display:flex;align-items:center;justify-content:center}
 .board{position:relative;display:grid;gap:var(--g);grid-template-columns:repeat(5,var(--cw));grid-template-rows:repeat(6,var(--ch))}
@@ -186,6 +192,7 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--lantern);outlin
   <div class="sheet">
     <img class="logo" id="logoImg" alt="Mine & Find box art: four miners around a treasure chest at a mine entrance">
     <h2>Dig deep. Find yours.</h2>
+    <div id="recBox"></div>
     <p>Flip cards, find your shape's treasure, and bump rivals back to the surface. Turn your phone sideways for the sideways map.</p>
     <div>
       <div class="lbl">Mode</div>
@@ -213,7 +220,7 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--lantern);outlin
       <ul>
         <li>Miners move one space at a time, never diagonally.</li>
         <li>Land on a card and it flips. Your shape? It goes in your chest. Not yours? It stays face up.</li>
-        <li>Land on another miner and they go back to their start. You don't dig that turn.</li>
+        <li>Land on another miner and they go back to their start. Then you flip or collect the card on that space.</li>
         <li>Your <b>Lamp</b> lets you move diagonally. Your <b>Cart</b> lets you ride any distance in a straight line.</li>
         <li>Find both and you get +3 and start the last round. Everyone else gets one more move.</li>
         <li>Turn order is random each game. The chest at the top (or on the left, when the map is sideways) goes first.</li>
@@ -354,11 +361,23 @@ function renderScores(){
     return `<div class="chip${m===now?' now':''}" style="--mc:${INFO[m.s].color}">${shapeSVG(m.s)}<div><div class="pts">${score(m)}</div>${team}</div><div class="gear">${lampOn(m.lamp)}${cartOn(m.cart)}</div></div>`;
   }).join('');
 }
+const soloFound = () => S.miners.reduce((a,x)=>a+x.found,0);
+const soloPts = () => S.miners.reduce((a,x)=>a+x.pts,0);
+let REC = {hi:null, soloBest:null, soloWins:0, soloGames:0};
+try { REC = Object.assign(REC, JSON.parse(localStorage.getItem('mnf-rec')||'{}')); } catch(e) {}
+function saveRec(){ try { localStorage.setItem('mnf-rec', JSON.stringify(REC)); } catch(e) {} }
+function recHTML(){
+  const a=[];
+  if (REC.hi) a.push(`<span>High score <b>${REC.hi.score}</b> · ${REC.hi.who}</span>`);
+  if (REC.soloBest) a.push(`<span>Solo high score <b>${REC.soloBest.pts}</b></span>`);
+  return a.length ? `<div class="recs">${a.join('')}</div>` : '';
+}
 function renderTurn(){
   if (S.over){ $('turn').innerHTML = `<div><b>Game over</b><small>Tap New game to dig again</small></div>`; return; }
   const m=cur();
   const who = m.ctrl==='cpu' ? 'Computer is digging…' : (S.mode==='two' ? `Player ${(m.s==='circle'||m.s==='triangle')?1:2}, tap a glowing space` : 'Tap a glowing space');
-  $('turn').innerHTML = `<img class="tk" src="${IMG[m.s+'_tok']}" alt=""><div><b>${name(m)}</b><small>${who}</small></div>${S.final?'<span class="final">Last round</span>':''}`;
+  const tally = '';
+  $('turn').innerHTML = `<img class="tk" src="${IMG[m.s+'_tok']}" alt=""><div><b>${name(m)}</b><small>${who}</small></div>${tally}${S.final?'<span class="final">Last round</span>':''}`;
 }
 function placeTokens(){
   const b=$('board'), cw=parseFloat(b.style.getPropertyValue('--cw'))||60, ch=parseFloat(b.style.getPropertyValue('--ch'))||40, g=parseFloat(b.style.getPropertyValue('--g'))||5;
@@ -444,9 +463,11 @@ async function doMove(m,r,c){
   if (occ){
     sendHome(occ, m); placeTokens(); buzz(60);
     say(`<em>${name(m)}</em> bumped ${name(occ)} back to the start!`);
-    await sleep(500);
-  } else {
-    placeTokens(); await sleep(340); if (S.gid!==gid) return;
+    await sleep(700); if (S.gid!==gid) return;
+  }
+  {
+    // the landing miner works the tile, even after a bump
+    if (!occ){ placeTokens(); await sleep(340); if (S.gid!==gid) return; }
     const cell=S.cells[r][c];
     const top = cell.type==='dig' ? cell.stack[cell.stack.length-1] : null;
     if (top){
@@ -458,7 +479,7 @@ async function doMove(m,r,c){
         say(`${name(m)} found ${cardName(top)}. Not theirs${S.adv?', so it flips back over.':', so it stays face up.'}`);
         if (S.adv){ await sleep(950); if (S.gid!==gid) return; top.up=false; renderCell(r,c); await sleep(300); }
       }
-    } else {
+    } else if (!occ) {
       say(`${name(m)} moves through an empty tunnel.`);
     }
   }
@@ -491,7 +512,7 @@ async function collect(m, cell, r, c, top){
       else say(`<em>${name(m)}</em> has Lamp + Cart! +3 bonus. Last round: everyone else gets one more move.`);
     } else say(`<em>${name(m)}</em> also completes Lamp + Cart for +3!`);
   }
-  renderScores(); placeTokens();
+  renderScores(); renderTurn(); placeTokens();
 }
 const RM = matchMedia('(prefers-reduced-motion: reduce)');
 async function flourish(card, m, from, toEl, caption){
@@ -583,8 +604,8 @@ function showOver(){
   const row = m => `<div class="row" style="--mc:${INFO[m.s].color}">${shapeSVG(m.s)}<span>${name(m)}</span><small>${m.bonus?'incl. +3 Lamp & Cart':''}</small><b>${score(m)}</b></div>`;
   if (S.mode==='solo'){
     const n=ms.reduce((a,x)=>a+x.found,0);
-    head = S.result==='win' ? `<div class="big">${n}/36</div><h2>Every treasure found. You beat the mine!</h2>` :
-      `<div class="big">${n}/36</div><h2>${S.result==='lose'?'A Lamp and Cart set turned up before all the treasure.':'The mine is empty.'}</h2><p>Like solitaire, some deals can't be won. Try another dig.</p>`;
+    head = S.result==='win' ? `<div class="big">${soloPts()}</div><p>Total treasure · ${n} of 36 found</p><h2>Every treasure found. You beat the mine!</h2>` :
+      `<div class="big">${soloPts()}</div><p>Total treasure · ${n} of 36 found</p><h2>${S.result==='lose'?'A Lamp and Cart set turned up before all the treasure.':'The mine is empty.'}</h2><p>Like solitaire, some deals can't be won. Try another dig.</p>`;
     body = ms.map(row).join('');
   } else if (S.mode==='two'){
     const t1=x=>x.s==='circle'||x.s==='triangle'; const p1=ms.filter(t1).reduce((a,x)=>a+score(x),0), p2=ms.filter(x=>!t1(x)).reduce((a,x)=>a+score(x),0);
@@ -596,7 +617,16 @@ function showOver(){
     head = `<div class="big">${top}</div><h2>${winners.length>1 ? winners.map(name).join(' and ')+' tie!' : name(winners[0])+' wins!'}</h2><p>Most treasure takes it.</p>`;
     body = ms.map(row).join('');
   }
-  sh.innerHTML = `${head}<div class="rank">${body}</div><button class="go" type="button" id="againBtn">Dig again</button><button class="ghost" type="button" id="changeBtn">Change mode</button>`;
+  let rec='';
+  if (S.mode==='solo'){
+    const f=soloFound(), p=soloPts(); REC.soloGames++; if (S.result==='win') REC.soloWins++;
+    const b=REC.soloBest; if (!b || p>b.pts){ if (b) rec='<div class="newrec">New Solo high score!</div>'; REC.soloBest={found:f, pts:p}; }
+  } else {
+    const best=[...S.miners].sort((a,b)=>score(b)-score(a))[0];
+    if (!REC.hi || score(best)>REC.hi.score){ if (REC.hi) rec='<div class="newrec">New high score!</div>'; REC.hi={score:score(best), who:name(best)}; }
+  }
+  saveRec();
+  sh.innerHTML = `${head}${rec}<div class="rank">${body}</div>${recHTML()}<button class="go" type="button" id="againBtn">Dig again</button><button class="ghost" type="button" id="changeBtn">Change mode</button>`;
   $('againBtn').onclick=()=>{ $('over').hidden=true; newGame(); };
   $('changeBtn').onclick=()=>{ $('over').hidden=true; openSetup(); };
   $('over').hidden=false;
@@ -619,7 +649,7 @@ function renderSetup(){
     if (p.dataset.key==='p2') cfg.p2=v; else cfg.ctrl[p.dataset.key]=v; saveCfg(); renderSetup();
   });
 }
-function openSetup(){ renderSetup(); $('setup').hidden=false; }
+function openSetup(){ $('recBox').innerHTML=recHTML(); renderSetup(); $('setup').hidden=false; }
 $('modeSeg').addEventListener('click', e => { const b=e.target.closest('button'); if(!b) return; cfg.mode=b.dataset.mode; saveCfg(); renderSetup(); });
 $('advBtn').onclick = () => { cfg.adv=!cfg.adv; saveCfg(); renderSetup(); };
 $('startBtn').onclick = () => { $('setup').hidden=true; newGame(); };
