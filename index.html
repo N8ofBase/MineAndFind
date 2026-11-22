@@ -9,6 +9,10 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Mine & Find">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Audiowide&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
@@ -208,6 +212,8 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--lantern);outlin
     </div>
     <button class="go" id="startBtn" type="button">Start digging</button>
     <button class="ghost" id="setupRules" type="button">How to play</button>
+    <button class="ghost" id="installBtn" type="button" hidden>Add to home screen</button>
+    <div class="quick" id="iosTip" hidden>On iPhone or iPad: tap the <b>Share</b> button in Safari, then <b>Add to Home Screen</b>.</div>
   </div>
 </div>
 
@@ -657,5 +663,23 @@ $('logoImg').src=IMG.logo; $('rulesImg').src=IMG.rules; $('modesImg').src=IMG.mo
 newGame(false); S.busy=true; clearTargets(); openSetup();
 </script>
 
+<script>
+/* ---------- install to home screen ---------- */
+(function(){
+  const btn=document.getElementById('installBtn'), tip=document.getElementById('iosTip');
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  if (location.protocol.startsWith('http') && 'serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if (standalone || !location.protocol.startsWith('http')) return;
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  let ask=null;
+  addEventListener('beforeinstallprompt', e => { e.preventDefault(); ask=e; btn.hidden=false; });
+  addEventListener('appinstalled', () => { btn.hidden=true; tip.hidden=true; });
+  if (ios) btn.hidden=false;
+  btn.onclick = async () => {
+    if (ask){ ask.prompt(); await ask.userChoice; ask=null; btn.hidden=true; }
+    else tip.hidden = !tip.hidden;
+  };
+})();
+</script>
 </body>
 </html>
