@@ -199,7 +199,6 @@ button:focus-visible,.cell:focus-visible{outline:3px solid var(--lantern);outlin
       <div class="seg" id="modeSeg">
         <button type="button" data-mode="solo">Solo<small>run all 4</small></button>
         <button type="button" data-mode="standard">Custom<small>you vs. computer</small></button>
-        <button type="button" data-mode="two">2 Player<small>2 miners each</small></button>
       </div>
     </div>
     <div id="ctrlBox"></div>
@@ -272,7 +271,7 @@ const lampOn = on => LAMP.replace('<svg', `<svg class="${on?'on':''}"`);
 const cartOn = on => CART.replace('<svg', `<svg class="${on?'on':''}"`);
 
 let cfg = {v:2, mode:'solo', adv:false, ctrl:{circle:'human',diamond:'cpu',triangle:'cpu',star:'cpu'}, p2:'cpu'};
-try { const saved = JSON.parse(localStorage.getItem('mnf-cfg')||'null'); if (saved && saved.ctrl){ if (saved.v!==2){ saved.mode='solo'; saved.v=2; } cfg = Object.assign(cfg, saved); } } catch(e) {}
+try { const saved = JSON.parse(localStorage.getItem('mnf-cfg')||'null'); if (saved && saved.ctrl){ if (saved.v!==2){ saved.mode='solo'; saved.v=2; } cfg = Object.assign(cfg, saved); if (cfg.mode==='two') cfg.mode='solo'; } } catch(e) {}
 function saveCfg(){ try { localStorage.setItem('mnf-cfg', JSON.stringify(cfg)); } catch(e) {} }
 
 let S = null, cellEls = [], tokenEls = {}, uid = 0, gameId = 0;
@@ -304,7 +303,7 @@ function newGame(start=true){
     else if (isChest(r,c)) cells[r].push({type:'chest', s:order[r-1]});
     else cells[r].push({type:'dig', stack:[deck.pop(), deck.pop()]});
   }}
-  const ctrlFor = s => cfg.mode==='solo' ? 'human' : cfg.mode==='two' ? ((s==='circle'||s==='triangle') ? 'human' : cfg.p2) : cfg.ctrl[s];
+  const ctrlFor = s => cfg.mode==='solo' ? 'human' : cfg.ctrl[s];
   const miners = order.map(s => ({s, r:INFO[s].home[0], c:INFO[s].home[1], lamp:false, cart:false, pts:0, bonus:0, found:0, ctrl:ctrlFor(s)}));
   S = {cells, miners, turn:0, final:null, busy:false, over:false, result:null, mode:cfg.mode, adv:cfg.adv, gid:gameId};
   buildBoard(); fit(); renderAll();
@@ -357,7 +356,7 @@ function renderCell(r,c){
 function renderScores(){
   const now = S && !S.over ? cur() : null;
   $('scores').innerHTML = S.miners.map(m => {
-    const team = S.mode==='two' ? `<span class="tag">P${(m.s==='circle'||m.s==='triangle')?1:2}</span>` : '';
+    const team = '';
     return `<div class="chip${m===now?' now':''}" style="--mc:${INFO[m.s].color}">${shapeSVG(m.s)}<div><div class="pts">${score(m)}</div>${team}</div><div class="gear">${lampOn(m.lamp)}${cartOn(m.cart)}</div></div>`;
   }).join('');
 }
@@ -375,7 +374,7 @@ function recHTML(){
 function renderTurn(){
   if (S.over){ $('turn').innerHTML = `<div><b>Game over</b><small>Tap New game to dig again</small></div>`; return; }
   const m=cur();
-  const who = m.ctrl==='cpu' ? 'Computer is digging…' : (S.mode==='two' ? `Player ${(m.s==='circle'||m.s==='triangle')?1:2}, tap a glowing space` : 'Tap a glowing space');
+  const who = m.ctrl==='cpu' ? 'Computer is digging…' : 'Tap a glowing space';
   const tally = '';
   $('turn').innerHTML = `<img class="tk" src="${IMG[m.s+'_tok']}" alt=""><div><b>${name(m)}</b><small>${who}</small></div>${tally}${S.final?'<span class="final">Last round</span>':''}`;
 }
@@ -607,10 +606,6 @@ function showOver(){
     head = S.result==='win' ? `<div class="big">${soloPts()}</div><p>Total treasure · ${n} of 36 found</p><h2>Every treasure found. You beat the mine!</h2>` :
       `<div class="big">${soloPts()}</div><p>Total treasure · ${n} of 36 found</p><h2>${S.result==='lose'?'A Lamp and Cart set turned up before all the treasure.':'The mine is empty.'}</h2><p>Like solitaire, some deals can't be won. Try another dig.</p>`;
     body = ms.map(row).join('');
-  } else if (S.mode==='two'){
-    const t1=x=>x.s==='circle'||x.s==='triangle'; const p1=ms.filter(t1).reduce((a,x)=>a+score(x),0), p2=ms.filter(x=>!t1(x)).reduce((a,x)=>a+score(x),0);
-    head = `<div class="big">${p1} – ${p2}</div><h2>${p1===p2?'A tie. Share the gold!':`Player ${p1>p2?1:2} wins!`}</h2><p>Player 1: Circle + Triangle. Player 2: Diamond + Star.</p>`;
-    body = ms.map(row).join('');
   } else {
     ms.sort((a,b)=>score(b)-score(a));
     const top=score(ms[0]), winners=ms.filter(m=>score(m)===top);
@@ -638,8 +633,6 @@ function renderSetup(){
   let h='';
   if (cfg.mode==='standard'){
     h = `<div class="lbl">Pick your miner</div><div class="rows">` + ORDER.map(s=>`<div class="row" style="--mc:${INFO[s].color}">${shapeSVG(s)}<span>${INFO[s].name}</span>${pick(cfg.ctrl[s],['You','CPU'],s)}</div>`).join('') + `</div><p style="margin-top:8px;text-align:left">Choose You for the miner you want. The computer digs for the rest.</p>`;
-  } else if (cfg.mode==='two'){
-    h = `<div class="lbl">Teams</div><div class="rows"><div class="row">${shapeSVG('circle')}${shapeSVG('triangle')}<span>Player 1</span><small style="margin-left:auto;color:var(--dust);font-weight:800">You</small></div><div class="row">${shapeSVG('diamond')}${shapeSVG('star')}<span>Player 2</span>${pick(cfg.p2,['Friend','CPU'],'p2')}</div></div>`;
   } else {
     h = `<div class="quick">You move all four miners in chest order. Find all 36 treasures before any miner completes a Lamp and Cart set. Some deals can't be won.</div>`;
   }
